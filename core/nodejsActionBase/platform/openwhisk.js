@@ -20,9 +20,12 @@ function PlatformOpenWhiskImpl(platformFactory) {
     // Provide access to common runtime services
     var service = platformFactory.service;
 
-    this.registerHandlers = function(app, platform) {
+    this.registerHandlers = function (app, platform) {
         app.post('/init', platformFactory.wrapEndpoint(service.initCode));
-        app.post('/run', platformFactory.wrapEndpoint(service.runCode));
+        app.post('/onstart', platformFactory.wrapEndpoint(service.onStart));
+        app.post('/run', platformFactory.wrapEndpoint(service.onRun));
+        app.post('/onpause', platformFactory.wrapEndpoint(service.onPause));
+        app.post('/onfinish', platformFactory.wrapEndpoint(service.onFinish));
     };
 }
 

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-const { initializeActionHandler, NodeActionRunner } = require('../runner');
+const {initializeActionHandler, NodeActionRunner} = require('../runner');
 
 function NodeActionService(config) {
 
@@ -30,7 +30,11 @@ function NodeActionService(config) {
 
     let status = Status.ready;
     let server = undefined;
-    let userCodeRunner = undefined;
+
+    let onStartRunner = undefined;
+    let onRunRunner = undefined;
+    let onPauseRunner = undefined;
+    let onFinishRunner = undefined;
 
     function setStatus(newStatus) {
         if (status !== Status.stopped) {
@@ -47,11 +51,11 @@ function NodeActionService(config) {
      *
      */
     function responseMessage(code, response) {
-        return { code: code, response: response };
+        return {code: code, response: response};
     }
 
     function errorMessage(code, errorMsg) {
-        return responseMessage(code, { error: errorMsg });
+        return responseMessage(code, {error: errorMsg});
     }
 
     /**
@@ -59,8 +63,8 @@ function NodeActionService(config) {
      * created a NodeActionRunner.
      * @returns {boolean}
      */
-    this.initialized = function isInitialized(){
-        return (typeof userCodeRunner !== 'undefined');
+    this.initialized = function isInitialized() {
+        return (typeof onRunRunner !== 'undefined');
     };
 
     /**
@@ -69,7 +73,7 @@ function NodeActionService(config) {
      * @param app express app
      */
     this.start = function start(app) {
-        server = app.listen(config.port, function() {
+        server = app.listen(config.port, function () {
             var host = server.address().address;
             var port = server.address().port;
         });
@@ -83,16 +87,21 @@ function NodeActionService(config) {
      *  req.body = { main: String, code: String, binary: Boolean }
      */
     this.initCode = function initCode(req) {
-        if (status === Status.ready && userCodeRunner === undefined) {
+        if (status === Status.ready && onRunRunner === undefined) {
             setStatus(Status.starting);
 
             let body = req.body || {};
             let message = body.value || {};
 
             if (message.main && message.code && typeof message.main === 'string' && typeof message.code === 'string') {
-                return doInit(message).then(_ => {
+                return doInit(message).then(activeHandlers => {
                     setStatus(Status.ready);
-                    return responseMessage(200, { OK: true });
+                    return responseMessage(200, {
+                        OK: true,
+                        onStartHandlerOK: activeHandlers.onStartHandlerOK,
+                        onPauseHandlerOK: activeHandlers.onPauseHandlerOK,
+                        onFinishHandlerOK: activeHandlers.onFinishHandlerOK,
+                    });
                 }).catch(error => {
                     setStatus(Status.stopped);
                     let errStr = `Initialization has failed due to: ${error.stack ? String(error.stack) : error}`;
@@ -103,7 +112,7 @@ function NodeActionService(config) {
                 let msg = 'Missing main/no code to execute.';
                 return Promise.reject(errorMessage(403, msg));
             }
-        } else if (userCodeRunner !== undefined) {
+        } else if (onRunRunner !== undefined) {
             let msg = 'Cannot initialize the action more than once.';
             console.error('Internal system error:', msg);
             return Promise.reject(errorMessage(403, msg));
@@ -114,6 +123,22 @@ function NodeActionService(config) {
         }
     };
 
+    this.onStart = function (req) {
+        return runCode(req, onStartRunner);
+    };
+
+    this.onRun = function (req) {
+        return runCode(req, onRunRunner);
+    };
+
+    this.onPause = function (req) {
+        return runCode(req, onPauseRunner);
+    };
+
+    this.onFinish = function (req) {
+        return runCode(req, onFinishRunner);
+    };
+
     /**
      * Returns a promise of a response to the /exec invocation.
      * Note that the promise is failed if and only if there was an unhandled error
@@ -122,8 +147,8 @@ function NodeActionService(config) {
      *
      * req.body = { value: Object, meta { activationId : int } }
      */
-    this.runCode = function runCode(req) {
-        if (status === Status.ready && userCodeRunner !== undefined) {
+    function runCode(req, runner) {
+        if (status === Status.ready && runner !== undefined) {
             if (!ignoreRunStatus) {
                 setStatus(Status.running);
             }
@@ -138,7 +163,7 @@ function NodeActionService(config) {
                 return Promise.reject(errorMessage(403, errStr));
             }
 
-            return doRun(msg).then(result => {
+            return doRun(msg, runner).then(result => {
                 if (!ignoreRunStatus) {
                     setStatus(Status.ready);
                 }
@@ -153,7 +178,7 @@ function NodeActionService(config) {
                 return Promise.reject(errorMessage(502, msg));
             });
         } else {
-            let msg = userCodeRunner ? `System not ready, status is ${status}.` : 'System not initialized.';
+            let msg = runner ? `System not ready, status is ${status}.` : 'Runner not initialized.';
             console.error('Internal system error:', msg);
             return Promise.reject(errorMessage(403, msg));
         }
@@ -161,8 +186,22 @@ function NodeActionService(config) {
 
     function doInit(message) {
         return initializeActionHandler(message)
-            .then(handler => {
-                userCodeRunner = new NodeActionRunner(handler);
+            .then(handlers => {
+                if (handlers.onStart) {
+                    onStartRunner = new NodeActionRunner(handlers.onStart);
+                }
+                onRunRunner = new NodeActionRunner(handlers.onRun);
+                if (handlers.onPause) {
+                    onPauseRunner = new NodeActionRunner(handlers.onPause);
+                }
+                if (handlers.onFinish) {
+                    onFinishRunner = new NodeActionRunner(handlers.onFinish);
+                }
+                return {
+                    onStartHandlerOK: onStartRunner !== undefined,
+                    onPauseHandlerOK: onPauseRunner !== undefined,
+                    onFinishHandlerOK: onFinishRunner !== undefined,
+                };
             })
             // emit error to activation log then flush the logs as this is the end of the activation
             .catch(error => {
@@ -172,7 +211,7 @@ function NodeActionService(config) {
             });
     }
 
-    function doRun(msg) {
+    function doRun(msg, runner) {
         // Move per-activation keys to process env. vars with __OW_ (reserved) prefix
         Object.keys(msg).forEach(k => {
             if (typeof msg[k] === 'string' && k !== 'value') {
@@ -181,7 +220,7 @@ function NodeActionService(config) {
             }
         });
 
-        return userCodeRunner
+        return runner
             .run(msg.value)
             .then(result => {
                 if (typeof result !== 'object') {

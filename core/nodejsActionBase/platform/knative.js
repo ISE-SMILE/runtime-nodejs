@@ -92,7 +92,7 @@ function createInitDataFromEnvironment(env) {
 
         return initdata;
 
-    } catch(e){
+    } catch (e) {
         console.error(e);
         throw("Unable to process Initialization data: " + e.message);
     }
@@ -105,7 +105,7 @@ function createInitDataFromEnvironment(env) {
 function preProcessInitData(initdata, valuedata, activationdata) {
     try {
         // Look for init data within the request (i.e., "stem cell" runtime, where code is injected by request)
-        if (typeof(initdata) !== "undefined") {
+        if (typeof (initdata) !== "undefined") {
 
             if (initdata.main && typeof initdata.main === 'string') {
                 valuedata.main = initdata.main;
@@ -142,7 +142,7 @@ function preProcessInitData(initdata, valuedata, activationdata) {
             }
         }
 
-    } catch(e){
+    } catch (e) {
         console.error(e);
         throw("Unable to process Initialization data: " + e.message);
     }
@@ -189,7 +189,8 @@ function preProcessHTTPContext(req, valueData) {
                 delete tmpBody.raw;
                 var bodyStr = JSON.stringify(tmpBody);
                 // note: we produce an empty map if there are no query parms/
-                valueData.__ow_body = Buffer.from(bodyStr).toString("base64");;
+                valueData.__ow_body = Buffer.from(bodyStr).toString("base64");
+                ;
             }
             valueData.__ow_query = req.query;
         }
@@ -224,7 +225,7 @@ function preProcessActivationData(env, activationdata) {
                 }
             }
         );
-    } catch(e){
+    } catch (e) {
         console.error(e);
         throw("Unable to process Activation data: " + e.message);
     }
@@ -234,7 +235,7 @@ function preProcessActivationData(env, activationdata) {
  * Pre-process the incoming http request data, moving it to where the
  * route handlers expect it to be for an openwhisk runtime.
  */
-function preProcessRequest(req){
+function preProcessRequest(req) {
     try {
         let env = process.env || {};
 
@@ -250,7 +251,7 @@ function preProcessRequest(req){
             preProcessInitData(initData, valueData, activationData);
         }
 
-        if(hasActivationData(req)) {
+        if (hasActivationData(req)) {
             // process HTTP request header and body to make it available to function as parameter data
             preProcessHTTPContext(req, valueData);
 
@@ -264,7 +265,7 @@ function preProcessRequest(req){
         req.body.init = initData;
         req.body.activation = activationData;
 
-    } catch(e){
+    } catch (e) {
         console.error(e);
         // TODO: test this error is handled properly and results in an HTTP error response
         throw("Unable to process request data: " + e.message);
@@ -376,13 +377,13 @@ function PlatformKnativeImpl(platformFactory) {
         options: 'OPTIONS',
     };
 
-    const DEFAULT_METHOD = [ 'POST' ];
+    const DEFAULT_METHOD = ['POST'];
 
     // Provide access to common runtime services
     var service = platformFactory.service;
 
     // TODO: Should we use app.WrapEndpoint()?
-    this.run = function(req, res) {
+    this.run = function (req, res) {
 
         try {
 
@@ -391,13 +392,13 @@ function PlatformKnativeImpl(platformFactory) {
                 throw ("Cannot initialize a runtime with a dedicated function.");
 
             // If this is a dedicated, uninitialized runtime, then copy INIT data from env. into the request
-            if( !isStemCell(process.env) && !service.initialized()){
+            if (!isStemCell(process.env) && !service.initialized()) {
                 let body = req.body || {};
                 body.init = createInitDataFromEnvironment(process.env);
             }
 
             // Different pre-processing logic based upon request data needed due Promise behavior
-            if(hasInitData(req) && hasActivationData(req)){
+            if (hasInitData(req) && hasActivationData(req)) {
                 // Request has both Init and Run (activation) data
                 preProcessRequest(req);
                 // Invoke the OW "init" entrypoint
@@ -405,7 +406,7 @@ function PlatformKnativeImpl(platformFactory) {
                     // delete any INIT data (e.g., code, raw, etc.) from the 'value' data before calling run().
                     removeInitData(req.body);
                     // Invoke the OW "run" entrypoint
-                    service.runCode(req).then(function (result) {
+                    service.onRun(req).then(function (result) {
                         postProcessResponse(req, result, res)
                     });
                 }).catch(function (error) {
@@ -414,10 +415,10 @@ function PlatformKnativeImpl(platformFactory) {
                         res.status(error.code).json(error.response);
                     } else {
                         console.error("[wrapEndpoint]", "invalid errored promise", JSON.stringify(error));
-                        res.status(500).json({ error: "Internal error during function execution." });
+                        res.status(500).json({error: "Internal error during function execution."});
                     }
                 });
-            } else if(hasInitData(req)){
+            } else if (hasInitData(req)) {
                 // Request has ONLY Init data
                 preProcessRequest(req);
                 // Invoke the OW "init" entrypoint
@@ -429,14 +430,14 @@ function PlatformKnativeImpl(platformFactory) {
                         res.status(error.code).json(error.response);
                     } else {
                         console.error("[wrapEndpoint]", "invalid errored promise", JSON.stringify(error));
-                        res.status(500).json({ error: "Internal error during function execution." });
+                        res.status(500).json({error: "Internal error during function execution."});
                     }
                 });
-            } else if(hasActivationData(req)){
+            } else if (hasActivationData(req)) {
                 // Request has ONLY Run (activation) data
                 preProcessRequest(req);
                 // Invoke the OW "run" entrypoint
-                service.runCode(req).then(function (result) {
+                service.onRun(req).then(function (result) {
                     postProcessResponse(req, result, res)
                 }).catch(function (error) {
                     console.error(error);
@@ -444,13 +445,13 @@ function PlatformKnativeImpl(platformFactory) {
                         res.status(error.code).json(error.response);
                     } else {
                         console.error("[wrapEndpoint]", "invalid errored promise", JSON.stringify(error));
-                        res.status(500).json({ error: "Internal error during function execution." });
+                        res.status(500).json({error: "Internal error during function execution."});
                     }
                 });
             } else {
                 preProcessRequest(req);
                 // Invoke the OW "run" entrypoint
-                service.runCode(req).then(function (result) {
+                service.onRun(req).then(function (result) {
                     postProcessResponse(req, result, res)
                 }).catch(function (error) {
                     console.error(error);
@@ -458,7 +459,7 @@ function PlatformKnativeImpl(platformFactory) {
                         res.status(error.code).json(error.response);
                     } else {
                         console.error("[wrapEndpoint]", "invalid errored promise", JSON.stringify(error));
-                        res.status(500).json({ error: "Internal error during function execution." });
+                        res.status(500).json({error: "Internal error during function execution."});
                     }
                 });
             }
@@ -468,7 +469,7 @@ function PlatformKnativeImpl(platformFactory) {
     };
 
     // TODO: the 'httpMethods' var should not alternatively store string and string[] types
-    this.registerHandlers = function(app, platform) {
+    this.registerHandlers = function (app, platform) {
         var httpMethods = process.env.__OW_HTTP_METHODS;
         // default to "[post]" HTTP method if not defined
         if (typeof httpMethods === "undefined") {
@@ -477,7 +478,7 @@ function PlatformKnativeImpl(platformFactory) {
         } else {
             if (httpMethods.startsWith('[') && httpMethods.endsWith(']')) {
                 httpMethods = httpMethods.substr(1, httpMethods.length);
-                httpMethods = httpMethods.substr(0, httpMethods.length -1);
+                httpMethods = httpMethods.substr(0, httpMethods.length - 1);
                 httpMethods = httpMethods.split(',');
             }
         }

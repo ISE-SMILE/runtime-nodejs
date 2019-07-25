@@ -48,14 +48,14 @@ function initializeActionHandler(message) {
 
                 //  The module to require.
                 let whatToRequire = index !== undefined ? path.join(moduleDir, index) : moduleDir;
-                let handler = eval('require("' + whatToRequire + '").' + main);
-                return assertMainIsFunction(handler, message.main);
+                let handlers = eval('require("' + whatToRequire + '").handlers;');
+                return assertHandlersType(handlers);
             })
             .catch(error => Promise.reject(error));
     } else try {
         // The code is a plain old JS file.
-        let handler = eval('(function(){' + message.code + '\nreturn ' + message.main + '})()');
-        return assertMainIsFunction(handler, message.main);
+        let handlers = eval('(function(){' + message.code + '\n return handlers; })()');
+        return assertHandlersType(handlers);
     } catch (e) {
         return Promise.reject(e);
     }
@@ -157,12 +157,28 @@ function splitMainHandler(handler) {
     } else return undefined
 }
 
-function assertMainIsFunction(handler, name) {
-    if (typeof handler === 'function') {
-        return Promise.resolve(handler);
-    } else {
-        return Promise.reject("Action entrypoint '" + name + "' is not a function.");
+function assertHandlersType(handlers) {
+    if (typeof handlers !== 'object') {
+        return Promise.reject("handlers is not an object!");
     }
+
+    if (handlers.onStart !== undefined && typeof handlers.onStart !== 'function') {
+        return Promise.reject("handlers.onStart is neither undefined nor a function!");
+    }
+
+    if (typeof handlers.onRun !== 'function') {
+        return Promise.reject("handlers.onRun is not a function!");
+    }
+
+    if (handlers.onPause !== undefined && typeof handlers.onPause !== 'function') {
+        return Promise.reject("handlers.onPause is neither undefined nor a function!");
+    }
+
+    if (handlers.onFinish !== undefined && typeof handlers.onFinish !== 'function') {
+        return Promise.reject("handlers.onFinish is neither undefined nor a function!");
+    }
+
+    return Promise.resolve(handlers);
 }
 
 module.exports = {
