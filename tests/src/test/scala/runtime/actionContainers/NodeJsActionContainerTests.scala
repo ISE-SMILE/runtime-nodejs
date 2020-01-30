@@ -80,9 +80,25 @@ abstract class NodeJsActionContainerTests extends BasicActionRunnerTests with Ws
         |       "api_key": process.env['__OW_API_KEY'],
         |       "namespace": process.env['__OW_NAMESPACE'],
         |       "action_name": process.env['__OW_ACTION_NAME'],
+        |       "action_version": process.env['__OW_ACTION_VERSION'],
         |       "activation_id": process.env['__OW_ACTIVATION_ID'],
         |       "deadline": process.env['__OW_DEADLINE']
         |    }
+        |}
+      """.stripMargin.trim)
+  }
+
+  override val testEnvParameters = {
+    // the environment variables are ready at load time to ensure
+    // variables are already available in the runtime
+    TestConfig("""
+        |const envargs = {
+        |    "SOME_VAR": process.env.SOME_VAR,
+        |    "ANOTHER_VAR": process.env.ANOTHER_VAR
+        |}
+        |
+        |function main(args) {
+        |    return envargs
         |}
       """.stripMargin.trim)
   }

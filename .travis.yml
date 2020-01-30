@@ -16,8 +16,9 @@
 #
 
 sudo: required
-group: deprecated-2017Q3
-language: scala
+dist: xenial
+jdk: openjdk8
+language: java
 services:
   - docker
 
@@ -39,12 +40,12 @@ deploy:
     on:
       tags: true
       all_branches: true
-      repo: apache/incubator-openwhisk-runtime-nodejs
+      repo: apache/openwhisk-runtime-nodejs
   - provider: script
     script: "./tools/travis/publish.sh openwhisk 6 nightly && ./tools/travis/publish.sh openwhisk 8 nightly && ./tools/travis/publish.sh openwhisk 10 nightly && ./tools/travis/publish.sh openwhisk 12 nightly"
     on:
       branch: master
-      repo: apache/incubator-openwhisk-runtime-nodejs
+      repo: apache/openwhisk-runtime-nodejs
 
 env:
   global:
